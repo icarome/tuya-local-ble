@@ -85,7 +85,7 @@ class HASSTuyaBLEDeviceManager(AbstaractTuyaBLEDeviceManager):
                     credentials = v
                     break
 
-        _LOGGER.warning("Credentials = %r", list(credentials or []))
+        _LOGGER.debug("Credentials keys = %r", list(credentials or []))
 
         if credentials:
             result = TuyaBLEDeviceCredentials(
