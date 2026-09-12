@@ -185,7 +185,15 @@
             "name": "Battery"
         },
         "alarm_lock": {
-            "name": "Alarm"
+          "name": "Alarm",
+          "state": {
+            "normal": "Normal",
+            "wrong_finger": "Wrong Fingerprint",
+            "wrong_password": "Wrong Password",
+            "tamper_alarm": "Tamper Alarm",
+            "low_battery": "Low Battery",
+            "door_unclosed": "Door Unclosed"
+          }
         },
         "wrong_finger": {
             "name": "Wrong Fingerprint"

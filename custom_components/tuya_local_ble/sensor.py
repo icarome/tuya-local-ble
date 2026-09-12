@@ -319,6 +319,13 @@ mapping: dict[str, TuyaBLECategorySensorMapping] = {
                             "door_unclosed",
                         ],
                     ),
+                    icons=[
+                        "mdi:shield-check",
+                        "mdi:shield-alert",
+                        "mdi:shield-alert",
+                        "mdi:battery-alert",
+                        "mdi:door-open",
+                    ],
                 ),
                 TuyaBLESensorMapping(
                     dp_id=36,
@@ -711,36 +718,67 @@ class TuyaBLESensor(TuyaBLEEntity, SensorEntity):
     ) -> None:
         super().__init__(hass, coordinator, device, product, mapping.description)
         self._mapping = mapping
+        self._update_value_from_datapoint()
+
+    def _update_value_from_datapoint(self) -> None:
+        """Update native value and icon from current datapoint."""
+        if self._mapping.getter is not None:
+            self._mapping.getter(self)
+            return
+
+        datapoint = self._device.datapoints[self._mapping.dp_id]
+        if not datapoint:
+            return
+
+        if self.entity_description.options is not None:
+            options = self.entity_description.options
+            value = datapoint.value
+            option: str | None = None
+            try:
+                int_value = int(value)
+            except (TypeError, ValueError):
+                int_value = None
+
+            if int_value is not None and 0 <= int_value < len(options):
+                option = options[int_value]
+            elif isinstance(value, str) and value in options:
+                option = value
+            else:
+                _LOGGER.warning(
+                    "Sensor %s received value %r which is not in options %s",
+                    self.entity_id,
+                    value,
+                    options,
+                )
+
+            self._attr_native_value = option
+
+            if self._mapping.icons is not None and int_value is not None:
+                if 0 <= int_value < len(self._mapping.icons):
+                    self._attr_icon = self._mapping.icons[int_value]
+        elif datapoint.type == TuyaBLEDataPointType.DT_ENUM:
+            if self._mapping.icons is not None:
+                try:
+                    int_value = int(datapoint.value)
+                    if 0 <= int_value < len(self._mapping.icons):
+                        self._attr_icon = self._mapping.icons[int_value]
+                except (TypeError, ValueError):
+                    pass
+            self._attr_native_value = datapoint.value
+        elif datapoint.type == TuyaBLEDataPointType.DT_VALUE:
+            if self._mapping.coefficient == 1.0:
+                self._attr_native_value = datapoint.value
+            else:
+                self._attr_native_value = (
+                    datapoint.value / self._mapping.coefficient
+                )
+        else:
+            self._attr_native_value = datapoint.value
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        if self._mapping.getter is not None:
-            self._mapping.getter(self)
-        else:
-            datapoint = self._device.datapoints[self._mapping.dp_id]
-            if datapoint:
-                if datapoint.type == TuyaBLEDataPointType.DT_ENUM:
-                    if self.entity_description.options is not None:
-                        if datapoint.value >= 0 and datapoint.value < len(
-                            self.entity_description.options
-                        ):
-                            self._attr_native_value = self.entity_description.options[
-                                datapoint.value
-                            ]
-                        else:
-                            self._attr_native_value = datapoint.value
-                    if self._mapping.icons is not None:
-                        if datapoint.value >= 0 and datapoint.value < len(
-                            self._mapping.icons
-                        ):
-                            self._attr_icon = self._mapping.icons[datapoint.value]
-                elif datapoint.type == TuyaBLEDataPointType.DT_VALUE:
-                    self._attr_native_value = (
-                        datapoint.value / self._mapping.coefficient
-                    )
-                else:
-                    self._attr_native_value = datapoint.value
+        self._update_value_from_datapoint()
         self.async_write_ha_state()
 
     @property
