@@ -1,0 +1,24 @@
+{
+  "DC:23:4E:71:21:CA": {
+    "address": "DC:23:4E:71:21:CA",
+    "uuid": "YOUR_DEVICE_UUID",
+    "local_key": "YOUR_DEVICE_LOCAL_KEY",
+    "device_id": "YOUR_TUYA_DEVICE_ID",
+    "category": "jtmspro",
+    "product_id": "rppmvevx",
+    "device_name": "C501 Lock",
+    "product_model": "AT1",
+    "product_name": "Smart lock"
+  },
+  "20:F1:B2:28:70:71": {
+    "address": "20:F1:B2:28:70:71",
+    "uuid": "YOUR_DEVICE_UUID",
+    "local_key": "YOUR_DEVICE_LOCAL_KEY",
+    "device_id": "YOUR_TUYA_DEVICE_ID",
+    "category": "tdq",
+    "product_id": "dfs6sn0hbmfqqu3v",
+    "device_name": "Relay Switch",
+    "product_model": "AT1",
+    "product_name": "Relay Switch"
+  }
+}

@@ -1,0 +1,23 @@
+request_status:
+  name: Request status
+  description: Connects to the Tuya BLE device and queries latest datapoint values.
+
+get_dynamic_password:
+  name: Get dynamic password
+  description: Generates a 5-minute dynamic one-time password (OTP) via Tuya Cloud to unlock the lock on the physical keypad (enter code followed by #).
+  fields:
+    device_id:
+      name: Device
+      description: The lock device or Tuya device ID (optional if only one lock is configured).
+      required: false
+      example: eb3137w0ypatrz0b
+      selector:
+        device:
+          integration: tuya_local_ble
+    notify:
+      name: Show notification
+      description: Whether to display a persistent notification with the generated passcode and keypad instructions.
+      required: false
+      default: true
+      selector:
+        boolean:
