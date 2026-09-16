@@ -737,7 +737,7 @@ class TuyaBLEDevice:
                         device_info_payload = (
                             b"\x00\xf3"
                             if (
-                                self.product_id in ("hc7n0urm", "ikphogdj", "rppmvevx")
+                                self.product_id in ("hc7n0urm", "ikphogdj")
                                 or self._uses_fd50_channel
                             )
                             else bytes(0)
@@ -910,14 +910,14 @@ class TuyaBLEDevice:
                 packet += self._pack_int(length)
                 packet_protocol_version = self._protocol_version
                 if code == TuyaBLECode.FUN_SENDER_DEVICE_INFO and (
-                    self.product_id in ("hc7n0urm", "ikphogdj", "rppmvevx") or self._uses_fd50_channel
+                    self.product_id in ("hc7n0urm", "ikphogdj") or self._uses_fd50_channel
                 ):
                     packet_protocol_version = 2
                 packet += pack(">B", packet_protocol_version << 4)
 
             chunk_mtu = GATT_MTU
             if code == TuyaBLECode.FUN_SENDER_DEVICE_INFO and (
-                self.product_id in ("hc7n0urm", "ikphogdj", "rppmvevx") or self._uses_fd50_channel
+                self.product_id in ("hc7n0urm", "ikphogdj") or self._uses_fd50_channel
             ):
                 # TuyaOS FD50 locks use MTU exchange and expect DEVICE_INFO in one write.
                 chunk_mtu = 244
@@ -1239,7 +1239,7 @@ class TuyaBLEDevice:
         value:len.  Only safe configuration/status datapoints are surfaced for
         that lock; ambiguous lock-state events are intentionally ignored.
         """
-        if self.product_id in ("hc7n0urm", "y2yaegze", "rppmvevx"):
+        if self.product_id in ("hc7n0urm", "y2yaegze"):
             self._parse_raykube_datapoints_v4(data)
             return
 
@@ -1283,12 +1283,12 @@ class TuyaBLEDevice:
                 type.name,
                 value,
             )
-            if self.product_id not in ("hc7n0urm", "y2yaegze", "rppmvevx"):
+            if self.product_id not in ("hc7n0urm", "y2yaegze"):
                 self._datapoints._update_from_device(id, time.time(), flags, type, value)
                 datapoints.append(self._datapoints[id])
 
             if (
-                self.product_id in ("hc7n0urm", "y2yaegze", "rppmvevx")
+                self.product_id in ("hc7n0urm", "y2yaegze")
                 and type == TuyaBLEDataPointType.DT_RAW
                 and raw_value == b"\x00\x01\x01"
                 and not self._input_expected_responses
@@ -1853,7 +1853,7 @@ class TuyaBLEDevice:
             data += pack(">BBB", dp.id, int(dp.type.value), len(value))
             data += value
 
-        if self.product_id in ("hc7n0urm", "y2yaegze", "rppmvevx"):
+        if self.product_id in ("hc7n0urm", "y2yaegze"):
             if 6 in datapoint_ids:
                 # Raykube A1 Ultra / TuyaOS FD50 remote unlock command captured
                 # from the official app. It is built from the per-device
