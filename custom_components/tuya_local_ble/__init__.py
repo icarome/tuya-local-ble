@@ -15,7 +15,7 @@ from homeassistant.core import Event, HomeAssistant, SupportsResponse, callback
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 
-from .tuya_ble import TuyaBLEDevice
+from .tuya_ble import SERVICE_UUID, TuyaBLEDevice
 
 from .keyman import HASSTuyaBLEDeviceManager
 from .const import DOMAIN, SERVICE_GET_DYNAMIC_PASSWORD
@@ -229,14 +229,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 return
 
             now = time.monotonic()
-            mfr_data = service_info.advertisement.manufacturer_data.get(0x07D0, b"")
-            mfr_changed = bool(mfr_data and mfr_data != last_advertisement_mfr_data)
+            adv_data = (
+                service_info.advertisement.service_data.get(SERVICE_UUID)
+                or service_info.advertisement.service_data.get("0000a201-0000-1000-8000-00805f9b34fb")
+                or service_info.advertisement.manufacturer_data.get(0x07D0)
+                or (next(iter(service_info.advertisement.service_data.values()), None) if service_info.advertisement.service_data else None)
+            )
+            adv_changed = bool(adv_data and adv_data != last_advertisement_mfr_data)
 
             should_update = False
-            if mfr_changed and (now - last_battery_advertisement_update >= 5):
+            if adv_changed and (now - last_battery_advertisement_update >= 5):
                 _LOGGER.debug(
-                    "%s: Lock advertisement event detected, triggering on-demand sync",
+                    "%s: Lock advertisement event detected (data: %s), triggering on-demand sync",
                     address,
+                    adv_data.hex() if isinstance(adv_data, (bytes, bytearray)) else adv_data,
                 )
                 should_update = True
             elif now - last_battery_advertisement_update >= 300:
@@ -248,8 +254,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             if should_update:
                 last_battery_advertisement_update = now
-                if mfr_data:
-                    last_advertisement_mfr_data = mfr_data
+                if adv_data:
+                    last_advertisement_mfr_data = adv_data
                 if not device.is_connected and not device.is_connecting:
                     hass.async_create_task(_async_update_lock_from_advertisement())
 
