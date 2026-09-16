@@ -528,6 +528,8 @@ async def async_setup_entry(
     # Raykube: persistent connection is opt-in (default off). Gimdow keeps
     # hardcoded keep_connect=True for existing behavior.
     raykube_keep_connected = bool(entry.options.get(CONF_KEEP_CONNECTED, False))
+    if data.device.product_id in ("hc7n0urm", "y2yaegze", "rppmvevx", "ikphogdj", "c6hfl8bt"):
+        data.device.keep_connected = raykube_keep_connected
     for mapping in mappings:
         runtime_mapping = mapping
         if data.device.product_id in ("hc7n0urm", "y2yaegze", "rppmvevx"):

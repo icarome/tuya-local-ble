@@ -80,6 +80,8 @@ class TuyaBLEEntity(CoordinatorEntity):
     @property
     def available(self) -> bool:
         """Return if entity is available."""
+        if self._device.product_id in ("hc7n0urm", "y2yaegze", "rppmvevx", "ikphogdj", "c6hfl8bt"):
+            return True
         return self._coordinator.connected
 
     @callback

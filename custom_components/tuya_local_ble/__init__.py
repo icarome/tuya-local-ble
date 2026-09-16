@@ -186,23 +186,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     '''
     #hass.async_create_task(device.update())
 
-    await device.update()
+    try:
+        await device.update()
+    except BLEAK_EXCEPTIONS:
+        _LOGGER.warning(
+            "%s: Could not communicate with Tuya BLE device during setup (device may be asleep); will connect on demand or on next advertisement",
+            address,
+        )
     
-    last_raykube_advertisement_update = 0.0
+    last_battery_advertisement_update = 0.0
+    last_advertisement_mfr_data: bytes | None = None
 
-    async def _async_update_raykube_from_advertisement() -> None:
-        """Best-effort Raykube state refresh after a BLE advertisement."""
+    async def _async_update_lock_from_advertisement() -> None:
+        """Best-effort lock state refresh after a BLE advertisement."""
         try:
             await device.update()
         except BLEAK_EXCEPTIONS:
             _LOGGER.debug(
-                "%s: Raykube advertisement-triggered update failed",
+                "%s: Advertisement-triggered update failed",
                 address,
                 exc_info=True,
             )
         except Exception:
             _LOGGER.debug(
-                "%s: Raykube advertisement-triggered update failed unexpectedly",
+                "%s: Advertisement-triggered update failed unexpectedly",
                 address,
                 exc_info=True,
             )
@@ -213,19 +220,38 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         change: bluetooth.BluetoothChange,
     ) -> None:
         """Update from a ble callback."""
-        nonlocal last_raykube_advertisement_update
+        nonlocal last_battery_advertisement_update, last_advertisement_mfr_data
         device.set_ble_device_and_advertisement_data(
             service_info.device, service_info.advertisement
         )
-        if device.product_id in ("hc7n0urm", "y2yaegze"):
-            # Raykube locks do not push manual/keypad state changes while the
-            # integration is disconnected. A fresh advertisement after a
-            # physical action is the safest low-power cue we have to reconnect
-            # and request status, without keeping a permanent BLE session open.
+        if device.product_id in ("hc7n0urm", "y2yaegze", "rppmvevx", "ikphogdj", "c6hfl8bt"):
+            if device.keep_connected:
+                return
+
             now = time.monotonic()
-            if now - last_raykube_advertisement_update >= 300:
-                last_raykube_advertisement_update = now
-                hass.async_create_task(_async_update_raykube_from_advertisement())
+            mfr_data = service_info.advertisement.manufacturer_data.get(0x07D0, b"")
+            mfr_changed = bool(mfr_data and mfr_data != last_advertisement_mfr_data)
+
+            should_update = False
+            if mfr_changed and (now - last_battery_advertisement_update >= 5):
+                _LOGGER.debug(
+                    "%s: Lock advertisement event detected, triggering on-demand sync",
+                    address,
+                )
+                should_update = True
+            elif now - last_battery_advertisement_update >= 300:
+                _LOGGER.debug(
+                    "%s: Periodic lock advertisement sync (300s elapsed)",
+                    address,
+                )
+                should_update = True
+
+            if should_update:
+                last_battery_advertisement_update = now
+                if mfr_data:
+                    last_advertisement_mfr_data = mfr_data
+                if not device.is_connected and not device.is_connecting:
+                    hass.async_create_task(_async_update_lock_from_advertisement())
 
     entry.async_on_unload(
         bluetooth.async_register_callback(
