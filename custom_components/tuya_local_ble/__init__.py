@@ -188,14 +188,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     try:
         await device.update()
+        last_battery_advertisement_update = time.monotonic()
     except BLEAK_EXCEPTIONS:
         _LOGGER.warning(
             "%s: Could not communicate with Tuya BLE device during setup (device may be asleep); will connect on demand or on next advertisement",
             address,
         )
-    
+
     last_battery_advertisement_update = 0.0
-    last_advertisement_mfr_data: bytes | None = None
+    last_advertisement_data: tuple[bytes | None, bytes | None] | None = None
 
     async def _async_update_lock_from_advertisement() -> None:
         """Best-effort lock state refresh after a BLE advertisement."""
@@ -220,42 +221,55 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         change: bluetooth.BluetoothChange,
     ) -> None:
         """Update from a ble callback."""
-        nonlocal last_battery_advertisement_update, last_advertisement_mfr_data
+        nonlocal last_battery_advertisement_update, last_advertisement_data
         device.set_ble_device_and_advertisement_data(
             service_info.device, service_info.advertisement
         )
-        if device.product_id in ("hc7n0urm", "y2yaegze", "rppmvevx", "ikphogdj", "c6hfl8bt"):
-            if device.keep_connected:
-                return
-
+        if not device.keep_connected:
             now = time.monotonic()
-            adv_data = (
+            mfr_data = (
+                service_info.advertisement.manufacturer_data.get(0x07D0)
+                or service_info.advertisement.manufacturer_data.get(2000)
+                or (next(iter(service_info.advertisement.manufacturer_data.values()), None) if service_info.advertisement.manufacturer_data else None)
+            )
+            srv_data = (
                 service_info.advertisement.service_data.get(SERVICE_UUID)
                 or service_info.advertisement.service_data.get("0000a201-0000-1000-8000-00805f9b34fb")
-                or service_info.advertisement.manufacturer_data.get(0x07D0)
                 or (next(iter(service_info.advertisement.service_data.values()), None) if service_info.advertisement.service_data else None)
             )
-            adv_changed = bool(adv_data and adv_data != last_advertisement_mfr_data)
+            adv_payload = (mfr_data, srv_data)
 
             should_update = False
-            if adv_changed and (now - last_battery_advertisement_update >= 5):
-                _LOGGER.debug(
-                    "%s: Lock advertisement event detected (data: %s), triggering on-demand sync",
-                    address,
-                    adv_data.hex() if isinstance(adv_data, (bytes, bytearray)) else adv_data,
-                )
-                should_update = True
-            elif now - last_battery_advertisement_update >= 300:
-                _LOGGER.debug(
-                    "%s: Periodic lock advertisement sync (300s elapsed)",
-                    address,
-                )
-                should_update = True
+            if last_advertisement_data is None:
+                last_advertisement_data = adv_payload
+                if last_battery_advertisement_update == 0.0 and (mfr_data or srv_data):
+                    _LOGGER.debug(
+                        "%s: Initial advertisement detected after setup, triggering initial sync",
+                        address,
+                    )
+                    should_update = True
+            else:
+                adv_changed = bool((mfr_data or srv_data) and adv_payload != last_advertisement_data)
+                if adv_changed:
+                    _LOGGER.debug(
+                        "%s: Lock advertisement event detected (mfr: %s, srv: %s), triggering on-demand sync",
+                        address,
+                        mfr_data.hex() if isinstance(mfr_data, (bytes, bytearray)) else mfr_data,
+                        srv_data.hex() if isinstance(srv_data, (bytes, bytearray)) else srv_data,
+                    )
+                    last_advertisement_data = adv_payload
+                    if now - last_battery_advertisement_update >= 3:
+                        should_update = True
+                elif now - last_battery_advertisement_update >= 300:
+                    _LOGGER.debug(
+                        "%s: Periodic lock advertisement sync (300s elapsed)",
+                        address,
+                    )
+                    last_advertisement_data = adv_payload
+                    should_update = True
 
             if should_update:
                 last_battery_advertisement_update = now
-                if adv_data:
-                    last_advertisement_mfr_data = adv_data
                 if not device.is_connected and not device.is_connecting:
                     hass.async_create_task(_async_update_lock_from_advertisement())
 
