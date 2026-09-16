@@ -577,6 +577,10 @@ class TuyaBLEDevice:
         self._is_paired = False
         self._client = None
         self._cancel_idle_disconnect()
+        for future in list(self._input_expected_responses.values()):
+            if future and not future.done():
+                future.set_exception(TuyaBLEDeviceError(0))
+        self._input_expected_responses.clear()
         self._fire_disconnected_callbacks()
         if self._expected_disconnect:
             _LOGGER.debug(
@@ -1038,7 +1042,7 @@ class TuyaBLEDevice:
         if future:
             try:
                 await asyncio.wait_for(future, RESPONSE_WAIT_TIMEOUT)
-            except asyncio.TimeoutError:
+            except (asyncio.TimeoutError, TuyaBLEDeviceError):
                 _LOGGER.error(
                     "%s: timeout receiving response, RSSI: %s",
                     self.address,
