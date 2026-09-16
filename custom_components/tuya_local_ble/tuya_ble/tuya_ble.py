@@ -577,6 +577,7 @@ class TuyaBLEDevice:
         self._is_paired = False
         self._client = None
         self._cancel_idle_disconnect()
+        self._clean_input()
         for future in list(self._input_expected_responses.values()):
             if future and not future.done():
                 future.set_exception(TuyaBLEDeviceError(0))
@@ -619,6 +620,7 @@ class TuyaBLEDevice:
     async def _execute_disconnect(self) -> None:
         """Execute disconnection."""
         self._cancel_idle_disconnect()
+        self._clean_input()
         async with self._connect_lock:
             client = self._client
             self._expected_disconnect = True
@@ -657,6 +659,7 @@ class TuyaBLEDevice:
         if self._stopped:
             return
         self._cancel_idle_disconnect()
+        self._clean_input()
         self._expected_disconnect = False
         if self._connect_lock.locked():
             _LOGGER.debug(
@@ -1801,15 +1804,15 @@ class TuyaBLEDevice:
         packet_num, pos = self._unpack_int(data, pos)
 
         if packet_num < self._input_expected_packet_num:
-            _LOGGER.error(
-                "%s: Unexpcted packet (number %s) in notifications, " "expected %s",
+            _LOGGER.warning(
+                "%s: Unexpected packet (number %s) in notifications, expected %s",
                 self.address,
                 packet_num,
                 self._input_expected_packet_num,
             )
             self._clean_input()
-
-        if packet_num == self._input_expected_packet_num:
+            return
+        elif packet_num == self._input_expected_packet_num:
             if packet_num == 0:
                 self._input_buffer = bytearray()
                 self._input_expected_length, pos = self._unpack_int(data, pos)
@@ -1817,11 +1820,12 @@ class TuyaBLEDevice:
             self._input_buffer += data[pos:]
             self._input_expected_packet_num += 1
         else:
-            _LOGGER.error(
-                "%s: Missing packet (number %s) in notifications, received %s",
+            _LOGGER.warning(
+                "%s: Missing packet in notifications (expected #%s, received #%s, RSSI: %s)",
                 self.address,
                 self._input_expected_packet_num,
                 packet_num,
+                self.rssi,
             )
             self._clean_input()
             return
