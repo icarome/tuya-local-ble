@@ -20,6 +20,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from homeassistant.helpers.event import async_call_later
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.const import (
     STATE_UNKNOWN,
 )
@@ -89,9 +90,11 @@ mapping: dict[str, TuyaBLECategoryLockMapping] = {
                 TuyaBLELockMapping(
                     dp_id_unlock=6,
                     dp_id_lock=46,
-                    # V4 events are parsed, but the full state model is still unknown.
-                    # The entity reflects successful remote unlock after V4 ACK.
-                    dp_id=56,
+                    # DP 47 is standard Tuya lock_motor_state / door state.
+                    # DP 56 was previously mapped here in error (passage/stay-open mode,
+                    # not lock state), causing the lock to falsely report UNLOCKED on status queries.
+                    dp_id=47,
+                    value_means_locked=False,
                     dp_id_nop=8,
                     unlock_dp_ids=(12, 13, 15),
                     keep_connect=False,
@@ -174,7 +177,7 @@ def get_mapping_by_device(device: TuyaBLEDevice) -> list[TuyaBLECategoryLockMapp
         return []
 
 
-class TuyaBLELock(TuyaBLEEntity, LockEntity):
+class TuyaBLELock(TuyaBLEEntity, LockEntity, RestoreEntity):
     """Representation of a Tuya BLE Lock."""
 
     def __init__(
@@ -216,6 +219,14 @@ class TuyaBLELock(TuyaBLEEntity, LockEntity):
     async def async_added_to_hass(self) -> None:
         """Register callbacks when entity is added to hass."""
         await super().async_added_to_hass()
+        if (last_state := await self.async_get_last_state()) is not None:
+            if last_state.state in (LockState.LOCKED, LockState.UNLOCKED):
+                self._current_state = last_state.state
+        elif self._device.product_id in ("hc7n0urm", "y2yaegze", "rppmvevx", "ikphogdj", "c6hfl8bt"):
+            self._current_state = LockState.LOCKED
+        self._update_attrs()
+        self.async_write_ha_state()
+
         self._unregister_device_callback = self._device.register_callback(
             self._handle_device_datapoints
         )
